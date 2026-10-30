@@ -9,7 +9,7 @@
     "preview": "vite preview --host 127.0.0.1",
     "enumerate": "clang++ -O3 -std=c++17 tools/enumerate.cpp -o tools/enumerate && ./tools/enumerate data/raw",
     "verify": "clang++ -O3 -std=c++17 tools/verify.cpp -o tools/verify && ./tools/verify data/raw",
-    "test": "node tools/check.mjs && node tools/check-wait-search.mjs && node tools/check-patterns.mjs",
+    "test": "node tools/check.mjs && node tools/check-wait-search.mjs && node tools/check-patterns.mjs && node tools/check-abstractions.mjs",
     "enumerate:shapes": "clang++ -O3 -std=c++17 tools/enumerate-shapes.cpp -o tools/enumerate-shapes && ./tools/enumerate-shapes data/shape-raw",
     "compile:cores": "clang++ -O3 -std=c++17 tools/compile-cores.cpp -o tools/compile-cores && ./tools/compile-cores",
     "verify:patterns": "clang++ -O3 -std=c++17 tools/verify-patterns.cpp -o tools/verify-patterns && ./tools/verify-patterns data/raw && ./tools/verify-patterns data/shape-raw shape",
