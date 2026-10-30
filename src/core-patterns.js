@@ -1,23 +1,47 @@
 import { countsOf } from './mahjong.js'
 import { groupRecord, rotateRecord } from './wait-search.js'
-import { createCoreAnalyzer,modelExpression } from './abstraction.js'
+import { createCoreAnalyzer,modelExpression,waitMode,waitBasedMapping } from './abstraction.js'
 const tick=()=>new Promise(resolve=>setTimeout(resolve,0))
 export async function buildCoreFamilies(source,{canonicalize=false,mirror=false,parameterize=false,signal,onProgress}={}){
-  const families=new Map(),analyze=createCoreAnalyzer({limitCopies:source.limitCopies!==false,mirror,parameterize,canonicalize})
+  const families=new Map(),waitModes=new Map(),analyze=createCoreAnalyzer({limitCopies:source.limitCopies!==false,mirror,parameterize,canonicalize})
   for(let groupIndex=0;groupIndex<source.groups.length;groupIndex++){
     if(groupIndex%2048===0){if(signal?.aborted)throw new DOMException('已取消','AbortError');onProgress?.(groupIndex);await tick();if(signal?.aborted)throw new DOMException('已取消','AbortError')}
     const group=source.groups[groupIndex],original=groupRecord(source,group)
     for(const rotation of group.rotations){
       const record=rotateRecord(original,rotation),model=analyze(record)
+      const waitKey=record.waits.join(',')
+      if(!waitModes.has(waitKey))waitModes.set(waitKey,waitMode(record.waits,{mirror,limitCopies:source.limitCopies!==false}))
       if(!families.has(model.key))families.set(model.key,{...model,members:[],bindings:new Map(),modelText:modelExpression(model),mirrorText:modelExpression(model,{mirror:true})})
       const family=families.get(model.key)
-      family.members.push({groupIndex,rotation,map:canonicalize?model.map:null,prototypeMap:model.map,parameterTile:model.parameterTile,prototypeBinding:model.prototypeBinding})
+      family.members.push({groupIndex,rotation,map:canonicalize?model.map:null,prototypeMap:model.map,parameterTile:model.parameterTile,prototypeBinding:model.prototypeBinding,waitMode:waitModes.get(waitKey)})
       if(model.waitPair)family.bindings.set(model.prototypeBinding,(family.bindings.get(model.prototypeBinding)||0)+1)
     }
   }
   const result=[...families.values()].sort((a,b)=>a.core.length-b.core.length||b.members.length-a.members.length||a.key.localeCompare(b.key))
   if(signal?.aborted)throw new DOMException('已取消','AbortError')
   return result
+}
+export function groupFamiliesByWaits(families){
+  const modes=new Map(),frames=new Map()
+  for(const family of families)for(const member of family.members){
+    const mode=member.waitMode
+    if(!modes.has(mode.key))modes.set(mode.key,{...mode,total:0,families:new Map()})
+    const group=modes.get(mode.key)
+    const frameKey=family.key+':'+member.prototypeBinding
+    if(!frames.has(frameKey)){
+      const fullWaits=[...family.waits,...(family.waitPair?[member.prototypeBinding]:[])],map=waitBasedMapping(fullWaits,family.core,{mirror:family.mirrorMerged}),transform=tiles=>tiles.map(t=>map[t]).sort((a,b)=>a-b)
+      const core=transform(family.core),waits=transform(family.waits),binding=family.waitPair?map[member.prototypeBinding]:null
+      const key=Number(family.waitPair)+':'+Number(family.freePair)+':'+core.join('.')+'|'+waits.join('.')
+      const model={...family,core,waits,key}
+      frames.set(frameKey,{map,identity:map.every((t,i)=>t===i),binding,key,model:{...model,modelText:modelExpression(model),mirrorText:modelExpression(model,{mirror:true})}})
+    }
+    const frame=frames.get(frameKey)
+    if(!group.families.has(frame.key))group.families.set(frame.key,{...frame.model,members:[],bindings:new Map()})
+    const variant=group.families.get(frame.key),normalized=frame.identity?member:{...member,map:member.map?member.map.map(t=>frame.map[t]):null,prototypeMap:member.prototypeMap.map(t=>frame.map[t]),prototypeBinding:frame.binding}
+    variant.members.push(normalized);group.total++
+    if(family.waitPair)variant.bindings.set(frame.binding,(variant.bindings.get(frame.binding)||0)+1)
+  }
+  return [...modes.values()].map(mode=>({...mode,families:[...mode.families.values()]})).sort((a,b)=>b.total-a.total||a.key.localeCompare(b.key))
 }
 export function familyRecord(source,member){
   let record=rotateRecord(groupRecord(source,source.groups[member.groupIndex]),member.rotation)

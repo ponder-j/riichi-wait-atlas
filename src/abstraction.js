@@ -11,6 +11,21 @@ export function symmetryMapping(tiles,{mirror=true}={}){
   const honors=canonicalMapping(tiles)
   return Array.from({length:34},(_,t)=>t>=27?honors[t]:suits.findIndex(x=>x.s===Math.floor(t/9))*9+(suits.find(x=>x.s===Math.floor(t/9)).flipped?8-t%9:t%9))
 }
+// Waits determine the coordinate frame. Hand counts only break symmetries
+// that leave that entire wait set unchanged.
+export function waitBasedMapping(waits,tiles=[],{mirror=true}={}){
+  const w=countsOf(waits),h=countsOf(tiles),suits=[0,1,2].map(s=>{
+    const wc=w.slice(s*9,s*9+9),hc=h.slice(s*9,s*9+9),forward=[...wc,...hc],reverse=[...[...wc].reverse(),...[...hc].reverse()]
+    const flipped=mirror&&compareCounts(reverse,forward)<0
+    return {s,counts:flipped?reverse:forward,flipped}
+  }).sort((a,b)=>compareCounts(a.counts,b.counts)||a.s-b.s)
+  const order=(a,b)=>w[b]-w[a]||h[b]-h[a]||a-b,winds=[27,28,29,30].sort(order),dragons=[31,32,33].sort(order)
+  return Array.from({length:34},(_,t)=>t>=31?31+dragons.indexOf(t):t>=27?27+winds.indexOf(t):suits.findIndex(x=>x.s===Math.floor(t/9))*9+(suits.find(x=>x.s===Math.floor(t/9)).flipped?8-t%9:t%9))
+}
+export function waitMode(waits,{mirror=true,limitCopies=true}={}){
+  const normalized=mapTiles(waits,waitBasedMapping(waits,[],{mirror})),key=`${limitCopies?'P':'T'}-W-${waitSignature(normalized)}`
+  return {key,modeId:key.toUpperCase(),waits:normalized}
+}
 const mapTiles=(tiles,map)=>tiles.map(t=>map[t]).sort((a,b)=>a-b)
 const equalTiles=(a,b)=>a.length===b.length&&a.every((t,i)=>t===b[i])
 function signature(tiles){let v=0n;for(const count of countsOf(tiles))v=v*5n+BigInt(count);return v.toString(36)}
@@ -28,7 +43,7 @@ export function createCoreAnalyzer({limitCopies=true,mirror=false,parameterize=f
     if(analyses.has(rawKey))return analyses.get(rawKey)
     const identity=Array.from({length:34},(_,i)=>i)
     const make=(base,waits,parameterTile=null)=>{
-      const map=mirror||parameterize||canonicalize?symmetryMapping(base,{mirror}):identity
+      const map=mirror||parameterize?waitBasedMapping(waits,base,{mirror}):canonicalize?canonicalMapping(base):identity
       const core=mapTiles(base,map),constantWaits=mapTiles(waits,map),kind=parameterTile===null?(record.freePair?'H':'L'):'X'
       const key=`${limitCopies?'P':'T'}-${kind}-${signature(core)}-${waitSignature(constantWaits)}`
       const model={key,modelId:key.toUpperCase(),core,waits:constantWaits,waitPair:parameterTile!==null,freePair:record.freePair,freeMelds:(13-record.core.length-(record.freePair?2:0))/3,mirrorMerged:mirror,map,parameterTile,prototypeBinding:parameterTile===null?null:map[parameterTile]}
