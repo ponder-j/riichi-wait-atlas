@@ -1,10 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { gunzipSync } from 'fflate'
 import { ArrowDownToLine, ArrowRight, BookOpen, Check, ChevronLeft, ChevronRight, Copy, Download, RotateCcw, Search, Shuffle, SlidersHorizontal, X } from 'lucide-react'
 import { Button, Dialog, Input, NativeSelect } from './components/ui'
 import { calculate, canonical, countsOf, decompose, notation, orbitCount, parseNotation, permutations, recordAt, tileName } from './mahjong'
 import meta from './meta.json'
+import { loadData } from './data'
+import { downloadBlob } from './download'
+import { Tile, Tiles, HandRow } from './components/hand'
+import { WaitSearch } from './WaitSearch'
 import './style.css'
 
 const fmt = n => n.toLocaleString('en-US')
@@ -12,30 +15,7 @@ const NUMBERS = Array.from({length:11},(_,i)=>i+3)
 const SUIT_PERMUTATIONS=[[0,1,2],[1,2,0],[2,0,1],[1,0,2],[0,2,1],[2,1,0]]
 const windRotations=[[0,1,2,3],[1,2,3,0],[2,3,0,1],[3,0,1,2]]
 const WIND_PERMUTATIONS=[...windRotations,...permutations([0,1,2,3]).filter(p=>!windRotations.some(r=>r.every((v,i)=>v===p[i])))]
-const cache = new Map()
 const EMPTY_FILTERS = { suits:'all', honors:'all', quads:'all', remain:'all' }
-function base64Bytes(s) { return Uint8Array.from(atob(s), c=>c.charCodeAt(0)) }
-async function loadData(n) {
-  if(!cache.has(n)) cache.set(n,(async()=>{
-    let b
-    if(window.ATLAS_DATA) b=base64Bytes(window.ATLAS_DATA[n])
-    else { const r=await fetch(`./data/${n}.bin.gz`); if(!r.ok)throw new Error('牌谱数据加载失败，请重试。');b=new Uint8Array(await r.arrayBuffer()) }
-    const result=b[0]===31&&b[1]===139?gunzipSync(b):b
-    if(result.length!==meta.counts[n]*18)throw new Error('牌谱文件长度不符，请重新加载。')
-    return result
-  })().catch(e=>{cache.delete(n);throw e}))
-  return cache.get(n)
-}
-function Tile({ t, small=false, highlight=false }) {
-  const name=meta.tiles[t], src=window.ATLAS_TILES?.[t]||`./assets/tiles/${name}.svg`
-  return <img className={`tile${small?' tile-small':''}${highlight?' tile-highlight':''}`} src={src} width="32" height="44" alt={tileName(t)} title={tileName(t)} draggable="false" />
-}
-function Tiles({ tiles, small=false, drawn=-1, className='' }) {
-  return <div className={`tiles ${className}`} role="img" aria-label={tiles.map(tileName).join('、')}>{tiles.map((t,i)=><React.Fragment key={`${i}-${t}`}>{i>0&&Math.floor(t/9)!==Math.floor(tiles[i-1]/9)?<span className="suit-gap" aria-hidden="true"/>:null}<Tile t={t} small={small} highlight={t===drawn}/></React.Fragment>)}</div>
-}
-function downloadBlob(text,name,type='text/plain;charset=utf-8') {
-  const url=URL.createObjectURL(new Blob([text],{type})), a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1500)
-}
 function DownloadLink({ path, name, children, ...props }) {
   function click(e) {
     if(!window.ATLAS_DATA)return
@@ -48,18 +28,18 @@ function DownloadLink({ path, name, children, ...props }) {
   }
   return <a href={`./downloads/${path}`} download={name||path} onClick={click} {...props}>{children}</a>
 }
-function initialState() { const p=new URLSearchParams(location.hash.slice(1));const n=Number(p.get('n'));return {n:NUMBERS.includes(n)?n:3,page:Math.max(0,(Number(p.get('page'))||1)-1)} }
+function initialState() { const p=new URLSearchParams(location.hash.slice(1));const n=Number(p.get('n'));return {n:NUMBERS.includes(n)?n:3,page:Math.max(0,(Number(p.get('page'))||1)-1),mode:p.get('view')==='wait-search'?'wait-search':'catalogue'} }
 
 function App() {
   const initial=useRef(initialState()).current, selectedWaitRef=useRef(null)
   const [n,setN]=useState(initial.n),[page,setPage]=useState(initial.page),[pageSize,setPageSize]=useState(20)
   const [bytes,setBytes]=useState(null),[error,setError]=useState(''),[loading,setLoading]=useState(true),[reload,setReload]=useState(0)
   const [filters,setFilters]=useState(EMPTY_FILTERS),[query,setQuery]=useState(''),[applied,setApplied]=useState('')
-  const [rules,setRules]=useState(false),[downloads,setDownloads]=useState(false),[inspector,setInspector]=useState(null),[mode,setMode]=useState('catalogue')
+  const [rules,setRules]=useState(false),[downloads,setDownloads]=useState(false),[inspector,setInspector]=useState(null),[mode,setMode]=useState(initial.mode)
   useEffect(()=>{selectedWaitRef.current?.scrollIntoView({block:'nearest',inline:'center'})},[n,mode])
   const [jump,setJump]=useState(''),[showFilters,setShowFilters]=useState(false),[toast,setToast]=useState('')
   useEffect(()=>{let active=true;setLoading(true);setError('');setBytes(null);loadData(n).then(b=>{if(active){setBytes(b);setLoading(false)}}).catch(e=>{if(active){setError(e.message);setLoading(false)}});return()=>{active=false}},[n,reload])
-  useEffect(()=>{const p=new URLSearchParams({n:String(n),page:String(page+1)});history.replaceState(null,'','#'+p.toString())},[n,page])
+  useEffect(()=>{const p=new URLSearchParams({n:String(n),page:String(page+1)});if(mode==='wait-search')p.set('view','wait-search');history.replaceState(null,'','#'+p.toString())},[n,page,mode])
   useEffect(()=>{if(toast){const t=setTimeout(()=>setToast(''),2400);return()=>clearTimeout(t)}},[toast])
   const search=useMemo(()=>{try{const tiles=parseNotation(applied);return {tiles:canonical(tiles),error:''}}catch(e){return {tiles:[],error:e.message}}},[applied])
   const indices=useMemo(()=>{
@@ -94,7 +74,7 @@ function App() {
   function randomHand(){if(indices.length){const i=indices[Math.floor(Math.random()*indices.length)];setInspector({...recordAt(bytes,i),n})}}
   async function copy(s){try{await navigator.clipboard.writeText(s);setToast('牌谱已复制')}catch{setToast('请在详情中选择并复制牌谱')}}
   return <>
-    <header className="header"><div className="header-inner"><h1>日麻多面听牌图鉴</h1><nav aria-label="主导航"><button className={mode==='catalogue'?'active':''} onClick={()=>setMode('catalogue')}>全部牌谱</button><button className={mode==='calculator'?'active':''} onClick={()=>setMode('calculator')}>手牌验算</button></nav><div className="header-actions"><Button variant="ghost" aria-label="规则与口径" onClick={()=>setRules(true)}><BookOpen/><span>规则与口径</span></Button><Button variant="outline" onClick={()=>setDownloads(true)}><Download/><span>下载</span></Button></div></div></header>
+    <header className="header"><div className="header-inner"><h1>日麻多面听牌图鉴</h1><nav aria-label="主导航"><button className={mode==='catalogue'?'active':''} onClick={()=>setMode('catalogue')}>全部牌谱</button><button className={mode==='wait-search'?'active':''} onClick={()=>setMode('wait-search')}>待牌反查</button><button className={mode==='calculator'?'active':''} onClick={()=>setMode('calculator')}>手牌验算</button></nav><div className="header-actions"><Button variant="ghost" aria-label="规则与口径" onClick={()=>setRules(true)}><BookOpen/><span>规则与口径</span></Button><Button variant="outline" onClick={()=>setDownloads(true)}><Download/><span>下载</span></Button></div></div></header>
     <main className="main">
       {mode==='catalogue'?<>
         <section className="overview" aria-labelledby="overview-title"><div className="section-top"><h2 id="overview-title">按听牌种数浏览</h2><div className="verified"><Check size={14}/><span>{fmt(meta.total)} 种 · 全部复核</span></div></div>
@@ -124,7 +104,7 @@ function App() {
             </>:<div className="empty-state impossible"><span className="empty-number">{n}</span><h3>不存在 {n} 面听的 13 张手牌</h3><p>普通和牌形最多九面听；七对子只产生单骑听。<br/>国士无双产生一面听或十三面听，因此十、十一、十二面听均为 0 种。</p><Button variant="outline" onClick={()=>selectN(13)}>查看十三面听 <ArrowRight/></Button></div>}
           </section>
         </div>
-      </>:<Calculator onInspect={setInspector}/>}
+      </>:mode==='wait-search'?<WaitSearch onInspect={setInspector} onCopy={copy}/>:<Calculator onInspect={setInspector}/>}
       <footer><span>共 {fmt(meta.total)} 种 · 2026.10.31</span><span>牌图：<a href="https://github.com/FluffyStuff/riichi-mahjong-tiles" target="_blank" rel="noreferrer">FluffyStuff · 公有领域</a></span><button onClick={()=>setRules(true)}>枚举与复核</button></footer>
     </main>
     <Dialog open={rules} onOpenChange={setRules} title="规则、去重与完整性" className="rules-dialog"><Rules/></Dialog>
@@ -132,10 +112,6 @@ function App() {
     <Inspector record={inspector} onClose={()=>setInspector(null)} onCopy={copy}/>
     {toast?<div role="status" className="toast"><Check size={16}/>{toast}</div>:null}
   </>
-}
-function HandRow({record:r,n,onInspect,onCopy}) {
-  const c=countsOf(r.hand),code=`${n}-${String(r.index+1).padStart(6,'0')}`
-  return <article className="hand-row"><div className="hand-cell"><div className="hand-meta"><span className="hand-id">#{code}</span><code>{notation(r.hand)}</code><button onClick={onCopy} aria-label={`复制手牌 ${code}`} title="复制手牌"><Copy size={13}/></button></div><Tiles tiles={r.hand}/></div><div className="wait-cell"><span className="mobile-label">待牌 · {n} 种</span><div className="wait-tiles" role="img" aria-label={r.waits.map(t=>`${tileName(t)}余${4-c[t]}张`).join('、')}>{r.waits.map(t=><div key={t} className="wait-tile"><Tile t={t} small/><span>{4-c[t]}</span></div>)}</div></div><div className="remaining-cell"><strong>{r.remaining}</strong><span>张</span></div><Button className="detail-button" variant="ghost" size="icon" aria-label={`查看 ${code} 和牌拆解`} title="查看和牌拆解" onClick={onInspect}><ChevronRight/></Button></article>
 }
 function Inspector({record:r,onClose,onCopy}) {
   const [draw,setDraw]=useState(null),[permutation,setPermutation]=useState(0),[wind,setWind]=useState(0),[dragon,setDragon]=useState(0)

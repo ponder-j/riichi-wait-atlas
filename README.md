@@ -19,6 +19,8 @@
 
 `dist/index.html` 为网站入口，需以 HTTP 服务打开。`dist/downloads/riichi-atlas-offline.html` 为自包含离线文件，可双击打开，不需要网络或服务器。两者均包含全部手牌，可筛选、分页、检索、验算并查看每种待牌的和牌拆解。
 
+“待牌反查”只支持完整待牌集合完全相同的精确匹配。例如输入 `69p7z`，只返回恰好听 6 筒、9 筒、中三种牌的 13 张手牌。反查会展开数牌花色、四风、三元牌的整体置换，按输入的实际牌名显示全部匹配配置，并合并重复手牌；也可选“每类只看一例”，结果可导出 CSV。检索范围沿用图鉴的 3–13 面听。
+
 完整 CSV 在 `dist/downloads/all-hands-csv.zip`，按听牌种数分为 11 个文件。SVG 资源与公有领域许可证在 `dist/downloads/mahjong-tiles-svg.zip`。
 
 ```sh
@@ -42,13 +44,14 @@ npm run dev
 
 `tools/verify.cpp` 使用独立的逐张摸入、选择雀头、递归拆面子判定，对全部 355,313 个结果及其 34 种摸牌进行复核，检查待牌无漏计、无多计、数量分组和三类置换规范化、无重复。另独立穷举全部 93,600 种单一花色 13 张手牌，其中 11,510 种三面以上听牌与本数据完全一致。
 
-浏览器使用的 JS 解码与第三套递归判定，通过 `tools/check.mjs` 分散抽查及所有 7–13 面听手牌验证。原始数据哈希与复核结果见 `public/data/manifest.json` 和 `reports/verification.json`。
+浏览器使用的 JS 解码与第三套递归判定，通过 `tools/check.mjs` 分散抽查及所有 7–13 面听手牌验证。待牌反查额外用独立和牌求解器验证了 53,671 手查询结果；对代表性手牌直接穷举 864 种整体置换，与优化检索结果逐一比对，验证不遗漏被原始数据去重的配置，并检查分页、取消、无结果和非法输入。原始数据哈希与复核结果见 `public/data/manifest.json` 和 `reports/verification.json`。
 
 ```sh
 npm run enumerate
 npm run verify
 python3 tools/prepare.py
 node tools/check.mjs
+node tools/check-wait-search.mjs
 npm run build
 node tools/offline.mjs
 ```

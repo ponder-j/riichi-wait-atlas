@@ -1,0 +1,10 @@
+{
+  "ok": true,
+  "records": 53671,
+  "exactQueries": 7,
+  "renamingCases": 9,
+  "renamingsPerCase": 864,
+  "paging": true,
+  "cancellation": true,
+  "inputValidation": true
+}
