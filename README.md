@@ -25,6 +25,21 @@ An exhaustive riichi mahjong wait atlas with exact wait-to-hand search and 355,3
 
 “待牌反查”只支持完整待牌集合完全相同的精确匹配。例如输入 `69p7z`，只返回恰好听 6 筒、9 筒、中三种牌的 13 张手牌。反查会展开数牌花色、四风、三元牌的整体置换，按输入的实际牌名显示全部匹配配置，并合并重复手牌；也可选“每类只看一例”，结果可导出 CSV。检索范围沿用图鉴的 3–13 面听。
 
+### 四张边界与核心牌形
+
+反查和手牌验算提供“考虑一种牌最多只有 4 张”开关，默认不勾选：
+
+- 勾选：按实牌规则计算，手中已有 4 枚的牌不计为待牌。
+- 不勾选：按牌形计算，即使补牌需要理论上的第 5 枚，也计入完整待牌集合。现有 13 张手牌始终每种最多 4 枚。
+
+例如 `5666777789m111p` 在实牌规则下听 `456m`，在牌形规则下听 `4567m`，因此不会出现在默认的 `456m` 精确反查中。牌形数据单独穷举，共 375,438 种；也覆盖“实牌不足三面听，但牌形达到三面听”的手牌，不能仅过滤原实牌库代替。
+
+图鉴与反查默认按核心牌形合并。核心由删除 0–3 个完整面子、并可另抽出一个不干扰雀头对子得到，必须在所选规则下保持相同的**完整待牌集合**；保留最短核心，有多个最短候选时确定性选择一个，使每手牌只归入一组。可以展开查看全部已验算的 13 张配置。
+
+`456m` 的默认牌形精确反查有 4 种核心、2,143 手实际配置，其中 `4455566m＋两个不干扰面子` 合并了 1,004 手。“不干扰”是条件，不能任意无条件更换面子；更换后必须仍合法且完整待牌集合保持不变。图鉴中三面听的 305,994 种实牌牌型可合并为 1,276 种核心。
+
+导出会保留查询边界：核心视图导出核心 CSV，完整手牌视图导出手牌 CSV。离线 HTML 内嵌两套数据和核心索引。
+
 完整 CSV 在 `dist/downloads/all-hands-csv.zip`，按听牌种数分为 11 个文件。SVG 资源与公有领域许可证在 `dist/downloads/mahjong-tiles-svg.zip`。
 
 ```sh
@@ -70,6 +85,24 @@ npm run build
 
 本统计由项目穷举计算得出，非从规则文献引用的数量。生成日期：2026-10-31。
 
+### 牌形数据与核心索引复现
+
+```sh
+npm run enumerate
+npm run enumerate:shapes
+npm run compile:cores
+npm run verify:patterns
+npm run prepare:patterns
+npm test
+npm run build
+```
+
+`enumerate-shapes.cpp` 使用六进制编码 14 张完成形，允许至多一个牌种出现第 5 枚，并且只移除该第 5 枚得到合法 13 张手牌；其他完成形逐种移除。完成形含两种第五枚或第六枚时不可能移除一张后合法，因此排除。输出的 13 张牌仍以五进制规范化编码，避免第五枚进位碰撞。
+
+`compile-cores.cpp` 穷举可删除的完整面子组合，对剩余核心逐张尝试摸牌；只有完整待牌掩码相等时才可选为核心。`N.cores` 为每条 13 张记录对应的两字节小端位掩码，低 13 位表示保留哪些牌作为核心，第 13 位（值 8192）表示另有一个外部雀头对子。有外部对子时，核心摸入待牌后仅需拆成完整面子。
+
+独立递归校验器 `verify-patterns.cpp` 已复核全部 355,313 手实牌和 375,438 手牌形数据，包括核心待牌相等、移除部分可拆成完整面子；两种口径还分别对全部 93,600 种清一色手牌作独立穷举对照。结果见 `reports/core-verification.json` 和 `reports/shape-verification.json`。浏览器测试包含两套规则、用户案例、核心合并覆盖与额外牌形记录的回归检查。
+
 ## Build and GitHub Pages
 
 Requires Node.js 22.12 or newer. CI uses Node.js 24.
@@ -84,3 +117,5 @@ npm run preview
 The build produces `dist/`, including the self-contained offline HTML. Generated build output is ignored by Git; precomputed datasets and CSV/SVG downloads are included in `public/`.
 
 `.github/workflows/pages.yml` tests, builds and deploys `dist/` to GitHub Pages on every push to `main` or manual workflow dispatch. The Pages publishing source is GitHub Actions.
+
+对子也可抽象：`369m` 可概括为 `45678m＋1 个不干扰对子＋2 个不干扰面子`，共 5+2+6=13 张。对子和面子均受合法枚数、完整待牌集合不变的约束。展开时分别展示附加对子与面子，CSV 的 `free_pair` 字段保留该信息。

@@ -40,34 +40,34 @@ function rotationsForHand(hand,allowed){
 export function rotateRecord(record,rotation){
   const s=SUITS[Math.floor(rotation/144)],w=WINDS[Math.floor(rotation/6)%24],d=DRAGONS[rotation%6]
   const transform=t=>t<27?s[Math.floor(t/9)]*9+t%9:t<31?27+w[t-27]:31+d[t-31]
-  return {...record,hand:record.hand.map(transform).sort((a,b)=>a-b),waits:record.waits.map(transform).sort((a,b)=>a-b),rotation}
+  return {...record,hand:record.hand.map(transform).sort((a,b)=>a-b),core:record.core?.map(transform).sort((a,b)=>a-b),waits:record.waits.map(transform).sort((a,b)=>a-b),rotation}
 }
-export async function searchWaits(datasets,tiles,{signal,onProgress}={}){
+export async function searchWaits(datasets,tiles,{signal,onProgress,limitCopies=true}={}){
   const groups=[],target=waitMasks(tiles),compatibilityCache=new Map(),totalRecords=datasets.reduce((a,b)=>a+b.bytes.length/18,0)
   let processed=0,total=0
-  for(const {n,bytes} of datasets){
+  for(const {n,bytes,coreMasks} of datasets){
     for(let index=0;index<bytes.length/18;index++){
       if(processed%4096===0){abortIfNeeded(signal);onProgress?.({processed,totalRecords});await tick();abortIfNeeded(signal)}
       const masks=masksAt(bytes,index*18),key=masks.join(',')
       if(!compatibilityCache.has(key))compatibilityCache.set(key,compatiblePermutations(masks,target))
       const allowed=compatibilityCache.get(key)
-      if(allowed){const hand=Array.from(bytes.subarray(index*18,index*18+13)),rotations=rotationsForHand(hand,allowed);if(rotations.length){groups.push({n,index,rotations});total+=rotations.length}}
+      if(allowed){const hand=Array.from(bytes.subarray(index*18,index*18+13)),rotations=rotationsForHand(hand,allowed);if(rotations.length){const coreMask=coreMasks?coreMasks[index*2]|(coreMasks[index*2+1]<<8):8191;groups.push({n,index,rotations,coreMask});total+=rotations.length}}
       processed++
     }
   }
   abortIfNeeded(signal);onProgress?.({processed,totalRecords})
-  return {groups,total,datasets,tiles}
+  return {groups,total,datasets,tiles,limitCopies}
 }
+export function groupRecord(result,group) { const bytes=result.datasets.find(d=>d.n===group.n).bytes,r=recordAt(bytes,group.index);return {...r,core:r.hand.filter((_,i)=>group.coreMask&(1<<i)),freePair:Boolean(group.coreMask&8192),n:group.n,limitCopies:result.limitCopies!==false} }
 export function* matchingRecords(result,onePerClass=false){
-  const data=new Map(result.datasets.map(d=>[d.n,d.bytes]))
-  for(const g of result.groups){const original=recordAt(data.get(g.n),g.index);for(const rotation of onePerClass?g.rotations.slice(0,1):g.rotations)yield {...rotateRecord(original,rotation),n:g.n}}
+  for(const g of result.groups){const original=groupRecord(result,g);for(const rotation of onePerClass?g.rotations.slice(0,1):g.rotations)yield rotateRecord(original,rotation)}
 }
 export function matchPage(result,page,pageSize,onePerClass=false){
   if(!result)return []
   const rows=[],start=page*pageSize,end=start+pageSize,data=new Map(result.datasets.map(d=>[d.n,d.bytes]));let offset=0
   for(const group of result.groups){
     const rotations=onePerClass?group.rotations.slice(0,1):group.rotations,next=offset+rotations.length
-    if(next>start&&offset<end){const original=recordAt(data.get(group.n),group.index);for(let i=Math.max(0,start-offset);i<Math.min(rotations.length,end-offset);i++)rows.push({...rotateRecord(original,rotations[i]),n:group.n})}
+    if(next>start&&offset<end){const original=groupRecord(result,group);for(let i=Math.max(0,start-offset);i<Math.min(rotations.length,end-offset);i++)rows.push(rotateRecord(original,rotations[i]))}
     offset=next;if(offset>=end)break
   }
   return rows

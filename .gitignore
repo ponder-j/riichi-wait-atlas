@@ -8,3 +8,7 @@ reports/offline-bundle*
 /dist/
 /.openai/
 /public/downloads/riichi-atlas-offline.html
+
+/tools/enumerate-shapes
+/tools/compile-cores
+/tools/verify-patterns
