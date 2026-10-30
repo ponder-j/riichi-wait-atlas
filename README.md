@@ -1,4 +1,8 @@
-# 日麻多面听牌图鉴
+# Riichi Wait Atlas
+
+An exhaustive riichi mahjong wait atlas with exact wait-to-hand search and 355,313 canonical hands.
+
+[Live website](https://ponder-j.github.io/riichi-wait-atlas/) | [Exact wait search](https://ponder-j.github.io/riichi-wait-atlas/#view=wait-search) | [Offline HTML](https://ponder-j.github.io/riichi-wait-atlas/downloads/riichi-atlas-offline.html)
 
 13 张门清手牌的全量图鉴，统计恰好听 3–13 种牌的情况。
 
@@ -52,8 +56,8 @@ npm run verify
 python3 tools/prepare.py
 node tools/check.mjs
 node tools/check-wait-search.mjs
+npm test
 npm run build
-node tools/offline.mjs
 ```
 
 `data/raw/N.bin` 每条记录 18 字节：前 13 字节为排序后的牌索引（0–8 万，9–17 筒，18–26 索，27–33 东南西北白发中）；后 5 字节为小端 34 位待牌掩码。前 13 张牌经过数牌花色、四风与三元牌各自的全局置换规范化，文件按其计数向量升序排列。
@@ -65,3 +69,18 @@ node tools/offline.mjs
 - UI 使用 React、shadcn/ui 组件模式与 Radix Dialog；Lucide 图标。
 
 本统计由项目穷举计算得出，非从规则文献引用的数量。生成日期：2026-10-31。
+
+## Build and GitHub Pages
+
+Requires Node.js 22.12 or newer. CI uses Node.js 24.
+
+```sh
+npm ci
+npm test
+npm run build
+npm run preview
+```
+
+The build produces `dist/`, including the self-contained offline HTML. Generated build output is ignored by Git; precomputed datasets and CSV/SVG downloads are included in `public/`.
+
+`.github/workflows/pages.yml` tests, builds and deploys `dist/` to GitHub Pages on every push to `main` or manual workflow dispatch. The Pages publishing source is GitHub Actions.

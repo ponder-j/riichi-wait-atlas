@@ -3,3 +3,8 @@ tools/enumerate
 tools/verify
 reports/offline-bundle*
 .DS_Store
+
+# Generated website and local hosting metadata
+/dist/
+/.openai/
+/public/downloads/riichi-atlas-offline.html

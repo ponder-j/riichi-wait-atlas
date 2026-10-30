@@ -5,10 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "build": "vite build",
+    "build": "vite build && node tools/offline.mjs",
     "preview": "vite preview --host 127.0.0.1",
     "enumerate": "clang++ -O3 -std=c++17 tools/enumerate.cpp -o tools/enumerate && ./tools/enumerate data/raw",
-    "verify": "clang++ -O3 -std=c++17 tools/verify.cpp -o tools/verify && ./tools/verify data/raw"
+    "verify": "clang++ -O3 -std=c++17 tools/verify.cpp -o tools/verify && ./tools/verify data/raw",
+    "test": "node tools/check.mjs && node tools/check-wait-search.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
@@ -26,5 +27,14 @@
     "@vitejs/plugin-react": "^5.1.0",
     "tailwindcss": "^4.1.0",
     "vite": "^7.2.0"
+  },
+  "description": "An exhaustive riichi mahjong wait atlas with exact wait-to-hand search and 355,313 canonical hands.",
+  "homepage": "https://ponder-j.github.io/riichi-wait-atlas/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ponder-j/riichi-wait-atlas.git"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   }
 }
